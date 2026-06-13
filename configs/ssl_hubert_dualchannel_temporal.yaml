@@ -78,8 +78,8 @@ train:
   eval_valid_sample_count: 4000
   eval_valid_max_batches: null
   eval_valid_shuffle: false
-  batch_size: 64
-  eval_batch_size: 128
+  batch_size: 32
+  eval_batch_size: 64
   log_every_steps: 40
   learning_rate: 5.0e-5
   warmup_ratio: 0.05
