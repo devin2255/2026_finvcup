@@ -1,0 +1,99 @@
+seed: 42
+chunk_ms: 80
+context_chunks: 375
+target_chunks: 25
+stride: 2
+sample_rate: 16000
+max_train_samples: null
+max_valid_samples: null
+num_workers: 8
+
+data_augmentation:
+  dynamic_context: true
+  min_context_chunks: 125
+  max_context_chunks: 375
+  context_prob: 0.5
+
+paths:
+  project_root: /mnt/workspace/dorihue/2026_finvcup
+  train_audio_dir: /mnt/workspace/dorihue/2026_finvcup/train/audio
+  train_text_dir: /mnt/workspace/dorihue/2026_finvcup/train/text
+  train_labels_dir: /mnt/workspace/dorihue/2026_finvcup/train/labels
+  output_root: /mnt/workspace/dorihue/2026_finvcup/outputs/dualchannel_temporal
+  checkpoints_dir: /mnt/workspace/dorihue/2026_finvcup/outputs/dualchannel_temporal/checkpoints
+  logs_dir: /mnt/workspace/dorihue/2026_finvcup/outputs/dualchannel_temporal/logs
+  cache_root: /mnt/workspace/dorihue/2026_finvcup/.cache
+
+labels:
+  C: 0
+  T: 1
+  BC: 2
+  I: 3
+  NA: 4
+  positive_ids: [1, 2, 3]
+  multi_targets: [C, NA, I, BC, T]
+
+split:
+  valid_ratio: 0.1
+  by_conversation: true
+
+audio_encoder:
+  type: whisper
+  model_name: openai/whisper-large-v3
+  proj_dim: 512
+  freeze: true
+  unfreeze_layers: 2
+  dual_channel: true
+  tail_frames: 400
+  temporal_head:
+    type: gru
+    hidden_dim: 256
+    num_layers: 1
+    dropout: 0.1
+
+text_encoder:
+  model_name: Qwen/Qwen3-0.6B
+  max_length: 256
+  freeze_backbone: true
+
+context_encoder:
+  vocab_size: 5
+  embed_dim: 24
+  channels: [48, 96]
+  tail_k: 75
+
+fusion:
+  hidden_dim: 320
+  bilinear_rank: 64
+  dropout: 0.25
+
+train:
+  multi_label: true
+  pos_weight_mode: capped_per_label
+  pos_weight_cap: 8.0
+  focal_gamma: 2.0
+  label_smoothing: 0.05
+  epochs: 80
+  max_steps_per_epoch: 20000
+  eval_valid_sample_count: 8000
+  eval_valid_max_batches: null
+  eval_valid_shuffle: false
+  batch_size: 16
+  eval_batch_size: 16
+  log_every_steps: 40
+  learning_rate: 3.0e-5
+  warmup_ratio: 0.05
+  ema_decay: 0.995
+  weight_decay: 0.01
+  grad_clip_norm: 1.0
+  use_amp: true
+  gradient_accumulation_steps: 1
+  save_metric: best_f1
+  best_checkpoint_name: best_dualchannel_temporal.pt
+  early_stop_patience: 15
+
+env:
+  HF_HOME: /mnt/workspace/dorihue/2026_finvcup/.cache/huggingface
+  TRANSFORMERS_CACHE: /mnt/workspace/dorihue/2026_finvcup/.cache/huggingface
+  TORCH_HOME: /mnt/workspace/dorihue/2026_finvcup/.cache/torch
+  HF_ENDPOINT: https://hf-mirror.com

@@ -1,0 +1,27 @@
+# ---- Data (downloaded separately, see README) ----
+/train/
+/test/
+/outputs/
+
+# ---- Caches ----
+.cache/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ipynb_checkpoints/
+
+# ---- Model / data artifacts ----
+*.pt
+*.ckpt
+*.pth
+*.wav
+*.npy
+*.npz
+
+# ---- IDE / local agent ----
+.idea/
+.vscode/
+.claude/
+
+# ---- Misc ----
+*.log
