@@ -223,7 +223,12 @@ class SSLAudioEncoder(nn.Module):
         self.dual_channel = dual_channel
         self.tail_frames = tail_frames
         self.audio_len_samples = audio_len_samples
-        self.backbone = AutoModel.from_pretrained(model_name)
+        # layerdrop=0.0: LayerDrop randomly skips whole encoder layers during
+        # training. With only the top-N layers unfrozen, a skipped trainable
+        # layer receives no gradient, which DDP rejects ("parameters that were
+        # not used in producing loss"). Disabling it also ensures those few
+        # unfrozen layers train on every step.
+        self.backbone = AutoModel.from_pretrained(model_name, layerdrop=0.0)
         if self.freeze:
             for p in self.backbone.parameters():
                 p.requires_grad = False
