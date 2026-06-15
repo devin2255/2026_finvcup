@@ -52,7 +52,7 @@ audio_encoder:
     dropout: 0.1
 
 text_encoder:
-  model_name: Qwen/Qwen3-0.6B
+  model_name: Qwen/Qwen3-1.7B
   max_length: 256
   freeze_backbone: true        # base frozen; LoRA adapters added on top
 
