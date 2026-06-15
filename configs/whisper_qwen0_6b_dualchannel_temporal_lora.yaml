@@ -59,13 +59,13 @@ text_encoder:
   # (Qwen3.5-4B's `qwen3_5` arch is not recognized by the installed transformers.)
   model_name: /mnt/workspace/dorihue/2026_finvcup/.cache/models/Qwen3-4B
   max_length: 256
-  freeze_backbone: true        # base frozen; LoRA adapters added on top
+  freeze_backbone: true        # fully frozen, no LoRA (fixed text features)
 
 # LoRA on both backbones via PEFT. Requires: pip install peft
 lora:
   enable: true
-  audio: true                  # adapt Whisper encoder
-  text: true                   # adapt Qwen3
+  audio: true                  # adapt Whisper encoder (LoRA)
+  text: false                  # Qwen3 fully frozen (fixed features, no LoRA)
   r: 16
   alpha: 32
   dropout: 0.05
@@ -92,8 +92,8 @@ train:
   eval_valid_sample_count: 3000 # smaller val set -> faster eval between epochs
   eval_valid_max_batches: null
   eval_valid_shuffle: false
-  batch_size: 12             # ~35GB of 49GB; use the spare VRAM
-  eval_batch_size: 12
+  batch_size: 16             # text frozen frees VRAM; watch first step for OOM
+  eval_batch_size: 16
   log_every_steps: 40
   learning_rate: 3.0e-5         # heads (temporal head / fusion / classifier)
   lora_lr: 1.0e-4              # LoRA adapters train faster than the heads
