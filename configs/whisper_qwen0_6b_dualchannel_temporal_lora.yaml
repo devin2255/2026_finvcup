@@ -39,7 +39,9 @@ split:
 
 audio_encoder:
   type: whisper
-  model_name: openai/whisper-large-v3
+  # whisper-large-v3 from ModelScope, pre-downloaded to a local snapshot dir:
+  #   modelscope download --model openai-mirror/whisper-large-v3 --local_dir <this path>
+  model_name: /mnt/workspace/dorihue/2026_finvcup/.cache/models/whisper-large-v3
   proj_dim: 512
   freeze: true
   unfreeze_layers: 0          # LoRA handles capacity; no full-layer unfreeze
