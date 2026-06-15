@@ -10,6 +10,43 @@ from src.models.audio_temporal import (
 )
 
 
+def _apply_lora(module: nn.Module, lora_cfg: dict, target_modules: List[str]) -> nn.Module:
+    """Inject LoRA adapters into a (frozen) transformer backbone, in place.
+
+    Only the LoRA adapters are left trainable; the pretrained weights stay frozen.
+    Gradient checkpointing is enabled so that adapting deep backbones
+    (Whisper-large encoder / Qwen3) stays within GPU memory — otherwise every
+    layer's activations would be retained for the adapter backward pass.
+    """
+    from peft import LoraConfig, inject_adapter_in_model
+
+    cfg = LoraConfig(
+        r=int(lora_cfg.get("r", 16)),
+        lora_alpha=int(lora_cfg.get("alpha", 32)),
+        lora_dropout=float(lora_cfg.get("dropout", 0.05)),
+        target_modules=list(target_modules),
+        bias="none",
+    )
+    module = inject_adapter_in_model(cfg, module)
+    # Keep only the LoRA adapters trainable; freeze everything else.
+    for name, p in module.named_parameters():
+        p.requires_grad = "lora_" in name
+    # use_reentrant=False is required for DDP + frozen-base + LoRA so the
+    # checkpointed backward graph stays intact.
+    try:
+        module.enable_input_require_grads()
+    except Exception:
+        pass
+    if hasattr(module, "gradient_checkpointing_enable"):
+        try:
+            module.gradient_checkpointing_enable(
+                gradient_checkpointing_kwargs={"use_reentrant": False}
+            )
+        except TypeError:
+            module.gradient_checkpointing_enable()
+    return module
+
+
 class AudioEncoder(nn.Module):
     def __init__(self, sample_rate: int, n_mels: int, conv_channels: List[int], dropout: float):
         super().__init__()
@@ -126,6 +163,7 @@ class WhisperAudioEncoder(nn.Module):
         unfreeze_layers: int = 0,
         dual_channel: bool = False, tail_frames: int = 400,
         audio_len_samples: int = 480000, temporal_head_cfg: dict | None = None,
+        lora_cfg: dict | None = None,
     ):
         super().__init__()
         self.sample_rate = sample_rate
@@ -139,7 +177,16 @@ class WhisperAudioEncoder(nn.Module):
         if self.freeze:
             for p in self.encoder.parameters():
                 p.requires_grad = False
-        if unfreeze_layers > 0 and self.freeze:
+        if lora_cfg is not None and lora_cfg.get("enable"):
+            # Disable LayerDrop: a randomly-skipped LoRA'd layer would leave its
+            # adapters without grad and break DDP (find_unused_parameters=False).
+            if hasattr(self.encoder.config, "encoder_layerdrop"):
+                self.encoder.config.encoder_layerdrop = 0.0
+            self.encoder = _apply_lora(
+                self.encoder, lora_cfg,
+                ["q_proj", "k_proj", "v_proj", "out_proj", "fc1", "fc2"],
+            )
+        elif unfreeze_layers > 0 and self.freeze:
             total_layers = len(self.encoder.layers)
             for layer_idx in range(max(0, total_layers - unfreeze_layers), total_layers):
                 for p in self.encoder.layers[layer_idx].parameters():
@@ -507,7 +554,7 @@ class HandcraftedFeatures(nn.Module):
 
 class TextEncoder(nn.Module):
     def __init__(self, model_name: str, freeze_backbone: bool = True,
-                 tail_ratio: float = 0.3):
+                 tail_ratio: float = 0.3, lora_cfg: dict | None = None):
         super().__init__()
         self.backbone = AutoModel.from_pretrained(model_name)
         self.out_dim = int(self.backbone.config.hidden_size)
@@ -515,6 +562,13 @@ class TextEncoder(nn.Module):
         if freeze_backbone:
             for p in self.backbone.parameters():
                 p.requires_grad = False
+        if lora_cfg is not None and lora_cfg.get("enable"):
+            if hasattr(self.backbone.config, "use_cache"):
+                self.backbone.config.use_cache = False
+            self.backbone = _apply_lora(
+                self.backbone, lora_cfg,
+                ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
+            )
         self.attn_pool = AttentionPooling(self.out_dim)
 
     def forward(self, input_ids: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor:
@@ -624,6 +678,10 @@ class MultimodalFusion(nn.Module):
 class MultimodalTurnTakingModel(nn.Module):
     def __init__(self, cfg: Dict):
         super().__init__()
+        lora_cfg = dict(cfg.get("lora", {}) or {})
+        lora_on = bool(lora_cfg.get("enable", False))
+        audio_lora = {**lora_cfg, "enable": lora_on and bool(lora_cfg.get("audio", True))}
+        text_lora = {**lora_cfg, "enable": lora_on and bool(lora_cfg.get("text", True))}
         audio_type = str(cfg["audio_encoder"].get("type", "cnn")).lower()
         if audio_type == "whisper":
             audio_len_samples = int(cfg["context_chunks"]) * int(cfg["chunk_ms"]) \
@@ -639,6 +697,7 @@ class MultimodalTurnTakingModel(nn.Module):
                 tail_frames=int(cfg["audio_encoder"].get("tail_frames", 400)),
                 audio_len_samples=audio_len_samples,
                 temporal_head_cfg=cfg["audio_encoder"].get("temporal_head"),
+                lora_cfg=audio_lora,
             )
         elif audio_type == "ssl":
             audio_len_samples = int(cfg["context_chunks"]) * int(cfg["chunk_ms"]) \
@@ -665,6 +724,7 @@ class MultimodalTurnTakingModel(nn.Module):
             model_name=cfg["text_encoder"]["model_name"],
             freeze_backbone=bool(cfg["text_encoder"].get("freeze_backbone", True)),
             tail_ratio=float(cfg["text_encoder"].get("tail_ratio", 0.3)),
+            lora_cfg=text_lora,
         )
 
         ctx_cfg = cfg["context_encoder"]

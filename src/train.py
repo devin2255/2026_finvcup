@@ -319,9 +319,21 @@ def main():
         int(max_steps_per_epoch_cfg) if max_steps_per_epoch_cfg is not None else None
     )
 
+    base_lr = float(cfg["train"]["learning_rate"])
+    lora_lr = float(cfg["train"].get("lora_lr", base_lr))
+    lora_params, head_params = [], []
+    for _name, _p in model.named_parameters():
+        if not _p.requires_grad:
+            continue
+        (lora_params if "lora_" in _name else head_params).append(_p)
+    param_groups = []
+    if head_params:
+        param_groups.append({"params": head_params, "lr": base_lr})
+    if lora_params:
+        param_groups.append({"params": lora_params, "lr": lora_lr})
     optimizer = torch.optim.AdamW(
-        [p for p in model.parameters() if p.requires_grad],
-        lr=float(cfg["train"]["learning_rate"]),
+        param_groups,
+        lr=base_lr,
         weight_decay=float(cfg["train"]["weight_decay"]),
     )
     max_epochs = int(cfg["train"]["epochs"])
