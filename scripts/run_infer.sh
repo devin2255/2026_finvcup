@@ -6,9 +6,9 @@ if [[ $# -lt 3 ]]; then
   exit 1
 fi
 
-export HF_HOME=/path/to/.cache/huggingface
-export TRANSFORMERS_CACHE=/path/to/.cache/huggingface
-export TORCH_HOME=/path/to/nlp/.cache/torch
+export HF_HOME=/mnt/workspace/dorihue/2026_finvcup/.cache/huggingface
+export TRANSFORMERS_CACHE=/mnt/workspace/dorihue/2026_finvcup/.cache/huggingface
+export TORCH_HOME=/mnt/workspace/dorihue/2026_finvcup/.cache/torch
 export HF_ENDPOINT=https://hf-mirror.com
 export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}
 
