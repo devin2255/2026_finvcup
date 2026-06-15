@@ -54,10 +54,10 @@ audio_encoder:
     dropout: 0.1
 
 text_encoder:
-  # Qwen3.5-4B from ModelScope, pre-downloaded to a local snapshot dir:
-  #   pip install modelscope
-  #   modelscope download --model Qwen/Qwen3.5-4B --local_dir <this path>
-  model_name: /mnt/workspace/dorihue/2026_finvcup/.cache/models/Qwen3.5-4B
+  # Qwen3-4B from ModelScope, pre-downloaded to a local snapshot dir:
+  #   modelscope download --model Qwen/Qwen3-4B --local_dir <this path>
+  # (Qwen3.5-4B's `qwen3_5` arch is not recognized by the installed transformers.)
+  model_name: /mnt/workspace/dorihue/2026_finvcup/.cache/models/Qwen3-4B
   max_length: 256
   freeze_backbone: true        # base frozen; LoRA adapters added on top
 
